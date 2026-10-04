@@ -7,7 +7,7 @@ Small, dependency-free examples of the four things a webhook receiver must get r
 3. **Acknowledge fast, work later** (queue with retries, exponential backoff and jitter).
 4. **Reconcile on a schedule** (ask the API what changed, so a missed webhook is never a lost order).
 
-Examples are provided in **Node.js** (standard library only, Node 18+) and **Python** (standard library only, 3.10+). Each pattern is a single readable file with tests. Nothing here needs `npm install` or `pip install`.
+Examples are provided in **Node.js** (standard library only, Node 18+) and **Python** (standard library only, 3.10+). Each pattern is a single readable file. Signature verification, idempotency and retries have tests in both languages, and the Node.js receiver (`node/src/server.js`) has its own; the reconciliation job (`node/src/reconcile.js`, Node.js only) has no dedicated test. Nothing here needs `npm install` or `pip install`.
 
 Maintained by **Checkout Flow — Commerce & Payment Integration** · [checkoutflowdigital.com](https://checkoutflowdigital.com)
 
