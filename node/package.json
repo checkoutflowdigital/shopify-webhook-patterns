@@ -6,7 +6,7 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "test": "node --test 'test/*.test.js'",
+    "test": "node --test",
     "send": "node scripts/send-test-webhook.js",
     "reconcile": "node src/reconcile.js"
   },
