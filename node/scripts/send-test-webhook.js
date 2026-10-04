@@ -6,13 +6,14 @@
  *
  *   SHOPIFY_WEBHOOK_SECRET=... node scripts/send-test-webhook.js [url] [topic] [payload.json]
  *
- * Send it twice to watch the second delivery be acknowledged as a duplicate.
+ * Send it twice to watch the second delivery be acknowledged as a duplicate:
+ * both carry the same X-Shopify-Webhook-Id, like a Shopify retry. Set
+ * WEBHOOK_ID to simulate a new delivery.
  */
 
 const fs = require('node:fs');
 const path = require('node:path');
 const http = require('node:http');
-const crypto = require('node:crypto');
 const { computeShopifyHmac } = require('../src/verify-hmac');
 
 const secret = process.env.SHOPIFY_WEBHOOK_SECRET;
@@ -36,7 +37,7 @@ const req = http.request({
     'x-shopify-topic': topic,
     'x-shopify-shop-domain': 'example.myshopify.com',
     'x-shopify-hmac-sha256': computeShopifyHmac(body, secret),
-    'x-shopify-webhook-id': crypto.randomUUID(),
+    'x-shopify-webhook-id': process.env.WEBHOOK_ID || 'whk-sample-1',
     'x-shopify-event-id': process.env.EVENT_ID || 'evt-sample-1',
     'x-shopify-api-version': '2025-10',
   },

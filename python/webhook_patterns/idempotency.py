@@ -1,11 +1,14 @@
 """Idempotent webhook processing.
 
 Webhooks are delivered at least once. The same event can arrive twice, minutes
-apart, sometimes out of order. A ledger of processed event identifiers makes
+apart, sometimes out of order. A ledger of processed delivery identifiers makes
 the second delivery harmless:
 
-1. Derive a stable key (``X-Shopify-Event-Id`` is stable across retries;
-   ``X-Shopify-Webhook-Id`` is per delivery; last resort: topic + id + updated_at).
+1. Derive a stable key: ``X-Shopify-Webhook-Id``, the header Shopify documents
+   for detecting duplicate deliveries (a retried delivery carries the same id);
+   last resort: topic + id + updated_at. ``X-Shopify-Event-Id`` is not a
+   deduplication key: every subscription triggered by the same merchant action
+   receives its own delivery with the same event id. Use it for correlation only.
 2. Claim the key *before* doing any work. Already claimed: acknowledge and stop.
 3. If the work fails, release the claim so a retry can run.
 
@@ -62,8 +65,6 @@ class InMemoryIdempotencyStore:
 def idempotency_key(headers: Mapping[str, str], payload: Mapping[str, Any], topic: str) -> str:
     """Build a stable key from headers (lower-cased names) or, failing that, the payload."""
     lowered = {k.lower(): v for k, v in headers.items()}
-    if lowered.get("x-shopify-event-id"):
-        return f"event:{lowered['x-shopify-event-id']}"
     if lowered.get("x-shopify-webhook-id"):
         return f"webhook:{lowered['x-shopify-webhook-id']}"
     resource_id = payload.get("id", payload.get("admin_graphql_api_id", "unknown"))

@@ -3,7 +3,7 @@
 Small, dependency-free examples of the four things a webhook receiver must get right before it can be trusted with orders, payments or stock:
 
 1. **Verify the signature** (HMAC-SHA256 over the raw body, constant-time comparison).
-2. **Process each event once** (idempotency ledger keyed on the event id).
+2. **Process each delivery once** (idempotency ledger keyed on the webhook delivery id).
 3. **Acknowledge fast, work later** (queue with retries, exponential backoff and jitter).
 4. **Reconcile on a schedule** (ask the API what changed, so a missed webhook is never a lost order).
 
@@ -19,7 +19,7 @@ A webhook is the other platform telling you that something happened. It is fast,
 
 | The platform guarantees… | …so your receiver must |
 |---|---|
-| Delivery **at least once**: retries after timeouts and 5xx responses produce duplicates, sometimes out of order | keep a ledger of processed event ids and skip repeats |
+| Delivery **at least once**: retries after timeouts and 5xx responses produce duplicates, sometimes out of order | keep a ledger of processed delivery ids and skip repeats |
 | A **retry window**, not forever: Shopify documents that failed deliveries are retried a limited number of times over a few hours, then dropped | run a scheduled reconciliation through the API to catch what was missed |
 | **Public reachability**: anyone can POST to your endpoint | verify the HMAC signature before parsing anything |
 | A **short timeout** for your 2xx | record the event and return immediately; do the slow work afterwards |
@@ -36,7 +36,7 @@ node/
   src/server.js          complete receiver: raw body → verify → claim → enqueue → 200
   src/reconcile.js       scheduled catch-up through the Admin GraphQL API (pagination, throttling)
   scripts/send-test-webhook.js   signs a sample payload and posts it to your local receiver
-  test/                  node --test, 19 tests
+  test/                  node --test, 20 tests
 python/
   webhook_patterns/      same three patterns (verify_hmac, idempotency, retry)
   app.py                 complete receiver on http.server with a worker thread
@@ -51,7 +51,7 @@ examples/payloads/       synthetic orders/paid payload for local testing
 # Node receiver
 cd node
 SHOPIFY_WEBHOOK_SECRET=local-dev-secret npm start
-# in another terminal: send the same signed event twice
+# in another terminal: send the same signed delivery twice (same X-Shopify-Webhook-Id, like a retry)
 SHOPIFY_WEBHOOK_SECRET=local-dev-secret npm run send
 SHOPIFY_WEBHOOK_SECRET=local-dev-secret npm run send
 # → 200 {"received":true,"duplicate":false}
@@ -90,12 +90,14 @@ The same shape (HMAC over the raw body, base64 or hex in a header) applies to mo
 ### 2. Idempotency
 
 ```js
-const key = idempotencyKey(req.headers, payload, topic); // event:<X-Shopify-Event-Id>
+const key = idempotencyKey(req.headers, payload, topic); // webhook:<X-Shopify-Webhook-Id>
 const outcome = await runOnce(store, key, () => queue.enqueue(key, work));
 // outcome.ran === false → duplicate, acknowledged and skipped
 ```
 
-Key precedence: `X-Shopify-Event-Id` (stable across retries) → `X-Shopify-Webhook-Id` (per delivery) → `topic + resource id + updated_at` (also used by the reconciliation job, so webhooks and polling share one ledger).
+Key precedence: `X-Shopify-Webhook-Id` (the header Shopify documents for detecting duplicate deliveries; a retried delivery carries the same id) → `topic + resource id + updated_at` when that header is absent (the reconciliation job, which has no delivery headers, uses this form).
+
+`X-Shopify-Event-Id` is deliberately not a key. When one merchant action triggers several subscriptions, Shopify sends one delivery per subscription: each has its own `X-Shopify-Webhook-Id`, and all of them share the same `X-Shopify-Event-Id`. Keying on the event id would acknowledge the second delivery as a duplicate and drop it. Use the event id to correlate those deliveries, for example in logs.
 
 `InMemoryIdempotencyStore` is for tests and demos. In production the ledger must be shared by every worker: a table with a unique constraint on the key, or Redis `SET key NX EX <ttl>`. Keep claims for at least as long as the sender's retry window plus your reconciliation interval.
 

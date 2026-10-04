@@ -3,9 +3,12 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { InMemoryIdempotencyStore, idempotencyKey, runOnce } = require('../src/idempotency');
 
-test('prefers the event id, then the webhook id, then a payload-derived key', () => {
-  assert.equal(idempotencyKey({ 'x-shopify-event-id': 'e1', 'x-shopify-webhook-id': 'w1' }, {}, 't'), 'event:e1');
-  assert.equal(idempotencyKey({ 'x-shopify-webhook-id': 'w1' }, {}, 't'), 'webhook:w1');
+test('keys on the webhook id, never on the event id, then on a payload-derived key', () => {
+  assert.equal(idempotencyKey({ 'x-shopify-event-id': 'e1', 'x-shopify-webhook-id': 'w1' }, {}, 't'), 'webhook:w1');
+  // Same event id, two subscriptions: two distinct deliveries, two distinct keys.
+  assert.notEqual(idempotencyKey({ 'x-shopify-event-id': 'e1', 'x-shopify-webhook-id': 'w2' }, {}, 't'), 'webhook:w1');
+  assert.equal(idempotencyKey({ 'x-shopify-event-id': 'e1' }, { id: 42, updated_at: '2026-10-04T00:00:00Z' }, 'orders/paid'),
+    'payload:orders/paid:42:2026-10-04T00:00:00Z');
   assert.equal(idempotencyKey({}, { id: 42, updated_at: '2026-10-04T00:00:00Z' }, 'orders/paid'),
     'payload:orders/paid:42:2026-10-04T00:00:00Z');
 });

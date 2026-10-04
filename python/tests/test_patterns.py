@@ -36,8 +36,11 @@ class VerifyHmacTests(unittest.TestCase):
 
 class IdempotencyTests(unittest.TestCase):
     def test_key_precedence(self):
-        self.assertEqual(idempotency_key({"X-Shopify-Event-Id": "e1", "X-Shopify-Webhook-Id": "w1"}, {}, "t"), "event:e1")
-        self.assertEqual(idempotency_key({"X-Shopify-Webhook-Id": "w1"}, {}, "t"), "webhook:w1")
+        self.assertEqual(idempotency_key({"X-Shopify-Event-Id": "e1", "X-Shopify-Webhook-Id": "w1"}, {}, "t"), "webhook:w1")
+        # Same event id, two subscriptions: two distinct deliveries, two distinct keys.
+        self.assertNotEqual(idempotency_key({"X-Shopify-Event-Id": "e1", "X-Shopify-Webhook-Id": "w2"}, {}, "t"), "webhook:w1")
+        self.assertEqual(idempotency_key({"X-Shopify-Event-Id": "e1"}, {"id": 42, "updated_at": "2026-10-04T00:00:00Z"}, "orders/paid"),
+                         "payload:orders/paid:42:2026-10-04T00:00:00Z")
         self.assertEqual(idempotency_key({}, {"id": 42, "updated_at": "2026-10-04T00:00:00Z"}, "orders/paid"),
                          "payload:orders/paid:42:2026-10-04T00:00:00Z")
 

@@ -9,13 +9,16 @@
  * an invoice, sends an email or adjusts stock, running it twice is a bug a
  * customer will notice.
  *
- * The fix is a small ledger of event identifiers you have already processed:
+ * The fix is a small ledger of delivery identifiers you have already processed:
  *
- *   1. Derive a stable key for the delivery. Shopify sends
- *      `X-Shopify-Webhook-Id` (unique per delivery attempt) and
- *      `X-Shopify-Event-Id` (unique per event, stable across retries).
- *      Prefer the event id when present; fall back to the webhook id; as a last
- *      resort hash topic + resource id + updated_at.
+ *   1. Derive a stable key for the delivery. Shopify documents
+ *      `X-Shopify-Webhook-Id` as the header to detect duplicate deliveries
+ *      (a retried delivery carries the same id). Do not key on
+ *      `X-Shopify-Event-Id`: every subscription triggered by the same merchant
+ *      action receives its own delivery with the same event id, so keying on it
+ *      would drop legitimate deliveries. The event id is for correlating those
+ *      deliveries, not for deduplicating them. If the webhook id is missing,
+ *      fall back to topic + resource id + updated_at.
  *   2. Before doing any work, try to *claim* the key. If it is already claimed,
  *      acknowledge the delivery (2xx) and stop.
  *   3. If the work fails, release the claim so a retry can try again.
@@ -70,9 +73,6 @@ class InMemoryIdempotencyStore {
  * @param {object} payload parsed JSON body
  */
 function idempotencyKey(headers, payload, topic) {
-  const eventId = headers['x-shopify-event-id'];
-  if (eventId) return `event:${eventId}`;
-
   const webhookId = headers['x-shopify-webhook-id'];
   if (webhookId) return `webhook:${webhookId}`;
 

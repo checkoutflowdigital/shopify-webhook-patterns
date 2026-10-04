@@ -86,7 +86,7 @@ async function reconcileOrders({ config, store, sinceIso, handle, client = admin
 
     for (const { node } of edges) {
       const payload = { id: node.legacyResourceId, admin_graphql_api_id: node.id, updated_at: node.updatedAt };
-      // No X-Shopify-Event-Id here, so the key falls back to topic + id + updated_at.
+      // No X-Shopify-Webhook-Id here, so the key falls back to topic + id + updated_at.
       const key = idempotencyKey({}, payload, 'reconcile:orders');
       const outcome = await runOnce(store, key, () => handle(node));
       if (outcome.ran) processed += 1;

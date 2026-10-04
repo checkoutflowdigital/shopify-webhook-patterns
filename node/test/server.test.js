@@ -43,10 +43,11 @@ test('accepts a signed delivery and processes it once', () => withServer(async (
     'x-shopify-hmac-sha256': computeShopifyHmac(body, SECRET),
     'x-shopify-topic': 'orders/paid',
     'x-shopify-shop-domain': 'example.myshopify.com',
+    'x-shopify-webhook-id': 'whk-1',
     'x-shopify-event-id': 'evt-1',
   };
   const first = await post(server, body, headers);
-  const second = await post(server, body, headers); // the retry
+  const second = await post(server, body, headers); // the retry: same webhook id
   await queue.idle;
 
   assert.equal(first.status, 200);
@@ -56,14 +57,34 @@ test('accepts a signed delivery and processes it once', () => withServer(async (
   assert.equal(logs.filter((l) => l.startsWith('orders/paid')).length, 1);
 }));
 
+test('two subscriptions sharing an event id are both processed', () => withServer(async (server, logs, queue) => {
+  // One merchant action, two subscriptions: Shopify sends one delivery per
+  // subscription, each with its own X-Shopify-Webhook-Id and the same X-Shopify-Event-Id.
+  const body = JSON.stringify({ id: 1002, total_price: '10.00', currency: 'EUR' });
+  const headers = (webhookId) => ({
+    'x-shopify-hmac-sha256': computeShopifyHmac(body, SECRET),
+    'x-shopify-topic': 'orders/paid',
+    'x-shopify-shop-domain': 'example.myshopify.com',
+    'x-shopify-webhook-id': webhookId,
+    'x-shopify-event-id': 'evt-shared',
+  });
+  const first = await post(server, body, headers('whk-sub-a'));
+  const second = await post(server, body, headers('whk-sub-b'));
+  await queue.idle;
+
+  assert.equal(JSON.parse(first.body).duplicate, false);
+  assert.equal(JSON.parse(second.body).duplicate, false);
+  assert.equal(logs.filter((l) => l.startsWith('orders/paid')).length, 2);
+}));
+
 test('unknown topic is a permanent failure, not a retry loop', () => withServer(async (server, logs, queue) => {
   const body = JSON.stringify({ id: 7 });
   const res = await post(server, body, {
     'x-shopify-hmac-sha256': computeShopifyHmac(body, SECRET),
     'x-shopify-topic': 'carts/update',
-    'x-shopify-event-id': 'evt-2',
+    'x-shopify-webhook-id': 'whk-2',
   });
   await queue.idle;
   assert.equal(res.status, 200);
-  assert.ok(logs.includes('failed:event:evt-2'));
+  assert.ok(logs.includes('failed:webhook:whk-2'));
 }));
