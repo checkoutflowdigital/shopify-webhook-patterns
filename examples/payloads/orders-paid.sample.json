@@ -1,0 +1,25 @@
+{
+  "id": 1000000001,
+  "admin_graphql_api_id": "gid://shopify/Order/1000000001",
+  "name": "#1001",
+  "email": "customer@example.com",
+  "created_at": "2026-10-04T09:15:00+02:00",
+  "updated_at": "2026-10-04T09:15:30+02:00",
+  "currency": "EUR",
+  "total_price": "42.00",
+  "subtotal_price": "35.00",
+  "total_tax": "7.00",
+  "financial_status": "paid",
+  "fulfillment_status": null,
+  "gateway": "example-provider",
+  "line_items": [
+    {
+      "id": 2000000001,
+      "title": "Sample product",
+      "quantity": 1,
+      "price": "35.00",
+      "sku": "SAMPLE-001"
+    }
+  ],
+  "_note": "Synthetic payload for local testing. Shapes follow the Shopify orders webhook; values are invented."
+}

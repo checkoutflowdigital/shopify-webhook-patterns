@@ -1,0 +1,23 @@
+{
+  "name": "shopify-webhook-patterns",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Dependency-free Node.js examples for reliable Shopify and payment webhooks: HMAC verification, idempotent processing, retries with backoff, scheduled reconciliation.",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test 'test/*.test.js'",
+    "send": "node scripts/send-test-webhook.js",
+    "reconcile": "node src/reconcile.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "author": "Checkout Flow — Commerce & Payment Integration (https://checkoutflowdigital.com)",
+  "homepage": "https://github.com/checkoutflowdigital/shopify-webhook-patterns",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/checkoutflowdigital/shopify-webhook-patterns.git"
+  }
+}
