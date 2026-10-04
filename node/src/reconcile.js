@@ -9,9 +9,20 @@
  * event is gone unless you go and fetch it.
  *
  * So, on a schedule (hourly or daily), ask the API for everything that changed
- * since the last run and feed it through the *same* idempotent processing path
- * as the webhooks. Because the idempotency ledger is shared, resources already
- * handled by a webhook are skipped, and the ones that were missed get processed.
+ * since the last run and hand each order to `handle`, which should be the same
+ * business handler your webhook worker uses.
+ *
+ * The run-once ledger below, given a store that persists between runs, only
+ * stops overlapping runs from handling the same order version twice. It does
+ * not know which orders a webhook already handled: webhook deliveries are keyed
+ * `webhook:<X-Shopify-Webhook-Id>`, reconciled orders
+ * `payload:reconcile:orders:<id>:<updatedAt>`, and the two never match.
+ * Preventing a duplicate sale is the handler's job: check at the order level
+ * (for example, has a sale already been created for this order?) before
+ * creating anything, and make the check atomic (a unique constraint on the
+ * order id) so a webhook and a run handling the same order can't both pass it.
+ * Orders a webhook already synced are then skipped there, and the missed ones
+ * get processed.
  *
  * This file shows the shape of that job against the Shopify Admin GraphQL API.
  * It needs an Admin API access token with `read_orders`, provided through the

@@ -99,7 +99,7 @@ Key precedence: `X-Shopify-Webhook-Id` (the header Shopify documents for detecti
 
 `X-Shopify-Event-Id` is deliberately not a key. When one merchant action triggers several subscriptions, Shopify sends one delivery per subscription: each has its own `X-Shopify-Webhook-Id`, and all of them share the same `X-Shopify-Event-Id`. Keying on the event id would acknowledge the second delivery as a duplicate and drop it. Use the event id to correlate those deliveries, for example in logs.
 
-`InMemoryIdempotencyStore` is for tests and demos. In production the ledger must be shared by every worker: a table with a unique constraint on the key, or Redis `SET key NX EX <ttl>`. Keep claims for at least as long as the sender's retry window plus your reconciliation interval.
+`InMemoryIdempotencyStore` is for tests and demos. In production the ledger must be shared by every worker: a table with a unique constraint on the key, or Redis `SET key NX EX <ttl>`. Keep webhook claims for at least the sender's retry window, and reconciliation claims for longer than the overlap between two runs.
 
 ### 3. Retries and the queue
 
@@ -116,7 +116,9 @@ await retry(() => accounting.createSale(order), { maxAttempts: 5 });
 
 ### 4. Scheduled reconciliation
 
-`src/reconcile.js` pages through orders updated since the last run with the Admin GraphQL API (`sortKey: UPDATED_AT`, `query: "updated_at:>=…"`), handles `429` and `THROTTLED` with `retryAfterMs`, and pushes every order through the same `runOnce` ledger. Run it hourly or daily with an overlap (the example looks back two hours). Orders already handled by a webhook are skipped; the missed ones are processed.
+`src/reconcile.js` pages through orders updated since the last run with the Admin GraphQL API (`sortKey: UPDATED_AT`, `query: "updated_at:>=…"`), handles `429` and `THROTTLED` with `retryAfterMs`, and calls your `handle` function for each order. Run it hourly or daily with an overlap (the example looks back two hours).
+
+Its `runOnce` ledger, given a store that persists between runs, only stops overlapping runs from handling the same order version twice. It does not know which orders a webhook already processed: webhook deliveries are keyed `webhook:<X-Shopify-Webhook-Id>`, reconciled orders `payload:reconcile:orders:<id>:<updatedAt>`, and the two never match. So pass the same business handler your webhook worker uses, and make that handler prevent the business duplicate itself with an order-level check: for example, has a sale already been created for this order? (look it up by order id in your own records, or by external reference in the target system). Make it atomic, for example with a unique constraint on the order id, so a webhook and a reconciliation run handling the same order at the same moment can't both pass it. That check is what lets reconciliation fill the gaps without creating a second sale.
 
 ## Security notes
 
